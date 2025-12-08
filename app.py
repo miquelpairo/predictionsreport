@@ -421,6 +421,13 @@ def create_detailed_comparison(stats, param='H'):
         st.warning(f"No hay datos disponibles para el parámetro {param}")
         return None
     
+    # Calcular valor máximo para ajustar escala Y
+    max_val = 0
+    for product in products_with_data:
+        for lamp in lamps:
+            if lamp in stats[product] and param in stats[product][lamp]:
+                max_val = max(max_val, stats[product][lamp][param]['mean'])
+    
     # Número de subplots
     n_products = len(products_with_data)
     
@@ -445,12 +452,17 @@ def create_detailed_comparison(stats, param='H'):
                             marker=dict(color=colors[lamp_idx % len(colors)]),
                             showlegend=(col_idx == 0),
                             text=[f"{mean_val:.2f}"],
-                            textposition='outside'
+                            textposition='inside'
                         ),
                         row=1, col=col_idx+1
                     )
         
-        fig.update_yaxes(title_text=f"{param} (%)", row=1, col=col_idx+1)
+        fig.update_yaxes(
+            title_text=f"{param} (%)", 
+            row=1, 
+            col=col_idx+1,
+            range=[0, max_val * 1.15]
+        )
     
     fig.update_layout(
         height=400,
@@ -460,7 +472,6 @@ def create_detailed_comparison(stats, param='H'):
     )
     
     return fig
-
 
 def get_params_in_original_order(analyzer, products):
     """Obtener parámetros en el orden original del archivo XML"""
