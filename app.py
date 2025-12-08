@@ -878,18 +878,14 @@ def generate_html_report(stats, analyzer, filename):
         """
         
         # Obtener TODOS los parámetros para este producto en el orden del DataFrame original
-        # Usar el DataFrame original para mantener el orden de las columnas
         if product in analyzer.data:
             df = analyzer.data[product]
-            # Excluir columnas no numéricas y metadatos
             excluded_cols = ['No', 'ID', 'Note', 'Product', 'Method', 'Unit', 'Begin', 'End', 'Length']
-            # También excluir las columnas que son nombres de productos (segunda columna en algunos formatos)
             if len(df.columns) > 1:
                 excluded_cols.append(df.columns[1])
             
             params = [col for col in df.columns if col not in excluded_cols]
         else:
-            # Fallback: obtener parámetros de stats
             params = set()
             for lamp_stats in stats[product].values():
                 params.update([k for k in lamp_stats.keys() if k not in ['n', 'note']])
@@ -943,6 +939,34 @@ def generate_html_report(stats, analyzer, filename):
         </div>
     """
     
+    # Añadir gráficos de comparación detallada
+    html += """
+        <div class="section">
+            <h2>📊 Comparación Detallada por Parámetro</h2>
+    """
+    
+    # Obtener parámetros en orden original
+    params_ordered = get_params_in_original_order(analyzer, products)
+    
+    for param in params_ordered:
+        # Generar gráfico para este parámetro
+        fig = create_detailed_comparison(stats, param)
+        
+        if fig:
+            # Convertir gráfico a HTML
+            graph_html = fig.to_html(include_plotlyjs=False, div_id=f"graph_{param.replace(' ', '_')}")
+            
+            html += f"""
+                <h3 style="color: #3498db; margin-top: 30px;">{param}</h3>
+                <div class="plot-container">
+                    {graph_html}
+                </div>
+            """
+    
+    html += """
+        </div>
+    """
+    
     # Añadir reporte de texto
     text_report = generate_text_report(stats, analyzer)
     
@@ -979,7 +1003,6 @@ def generate_html_report(stats, analyzer, filename):
     """
     
     return html
-
 
 def generate_text_report(stats, analyzer):
     """Generar reporte de texto completo con todos los parámetros"""
