@@ -932,6 +932,31 @@ def generate_html_report(stats, analyzer, filename):
         </div>
     """
     
+    # Añadir reporte de texto
+    text_report = generate_text_report(stats, analyzer)
+    
+    html += """
+        <div class="section">
+            <h2>📄 Informe Detallado en Texto</h2>
+            <pre style="
+                background-color: #f8f9fa;
+                padding: 20px;
+                border-radius: 8px;
+                border: 1px solid #dee2e6;
+                overflow-x: auto;
+                font-family: 'Courier New', monospace;
+                font-size: 0.85em;
+                line-height: 1.5;
+                white-space: pre-wrap;
+            ">"""
+    
+    html += text_report
+    
+    html += """
+            </pre>
+        </div>
+    """
+    
     # Cerrar HTML
     html += """
         <div class="footer">
@@ -945,14 +970,21 @@ def generate_html_report(stats, analyzer, filename):
     return html
 
 
-def generate_text_report(stats):
-    """Generar reporte de texto similar al informe"""
+def generate_text_report(stats, analyzer):
+    """Generar reporte de texto completo con todos los parámetros"""
     
     report = []
-    report.append("=" * 100)
+    report.append("=" * 120)
     report.append("INFORME COMPARATIVO DE LÁMPARAS NIR")
-    report.append("Análisis de Predicciones")
-    report.append("=" * 100)
+    report.append("Análisis de Predicciones - Reporte Completo")
+    report.append("=" * 120)
+    report.append("")
+    report.append(f"Fecha de generación: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+    
+    # Información del sensor
+    if analyzer.sensor_serial:
+        report.append(f"Sensor NIR: {analyzer.sensor_serial}")
+    
     report.append("")
     
     # Listar lámparas comparadas
@@ -968,70 +1000,108 @@ def generate_text_report(stats):
     
     # Información por producto
     for product, product_stats in stats.items():
-        report.append("-" * 100)
+        report.append("-" * 120)
         report.append(f"PRODUCTO: {product.upper()}")
-        report.append("-" * 100)
+        report.append("-" * 120)
         report.append("")
+        
+        # Obtener TODOS los parámetros en orden original
+        if product in analyzer.data:
+            df = analyzer.data[product]
+            excluded_cols = ['No', 'ID', 'Note', 'Product', 'Method', 'Unit', 'Begin', 'End', 'Length']
+            if len(df.columns) > 1:
+                excluded_cols.append(df.columns[1])
+            params = [col for col in df.columns if col not in excluded_cols]
+        else:
+            params = set()
+            for lamp_stats in product_stats.values():
+                params.update([k for k in lamp_stats.keys() if k not in ['n', 'note']])
+            params = sorted(list(params))
+        
         report.append("RESULTADOS DE PREDICCIÓN:")
         report.append("")
         
-        # Buscar parámetros principales (H y PB)
-        params = []
-        for lamp_stats in product_stats.values():
-            params = [k for k in lamp_stats.keys() if k not in ['n', 'note']]
-            break
-        
-        # Tabla de resultados
-        header = f"{'Lámpara':<15} {'N':<5}"
-        for param in params[:2]:  # Mostrar solo los dos primeros parámetros
-            header += f" {param:>20}"
-        report.append(header)
-        report.append("-" * len(header))
-        
+        # Tabla de resultados por lámpara
         for lamp, lamp_stats in product_stats.items():
-            row = f"{lamp:<15} {lamp_stats['n']:<5}"
-            for param in params[:2]:
+            report.append(f"  Lámpara: {lamp} (N={lamp_stats['n']})")
+            report.append("  " + "-" * 100)
+            
+            for param in params:
                 if param in lamp_stats:
                     mean = lamp_stats[param]['mean']
                     std = lamp_stats[param]['std']
-                    row += f" {mean:>8.3f} ± {std:<8.3f} %"
-            report.append(row)
-        
-        report.append("")
+                    min_val = lamp_stats[param]['min']
+                    max_val = lamp_stats[param]['max']
+                    report.append(f"    {param:<25} {mean:>10.3f} ± {std:<8.3f}   (min: {min_val:>8.3f}, max: {max_val:>8.3f})")
+            
+            report.append("")
         
         # Análisis de diferencias entre lámparas
         if len(lamps) >= 2:
-            report.append("ANÁLISIS DE DIFERENCIAS:")
+            report.append("  ANÁLISIS DE DIFERENCIAS:")
             report.append("")
             
-            for i in range(len(lamps) - 1):
-                lamp1 = sorted(list(product_stats.keys()))[i]
-                lamp2 = sorted(list(product_stats.keys()))[i + 1]
+            # Comparar primera lámpara con las demás
+            base_lamp = sorted(list(product_stats.keys()))[0]
+            
+            for lamp in sorted(list(product_stats.keys()))[1:]:
+                report.append(f"    {lamp} vs {base_lamp} (baseline):")
                 
-                report.append(f"  {lamp2} vs {lamp1}:")
-                
-                for param in params[:2]:
-                    if param in product_stats[lamp1] and param in product_stats[lamp2]:
-                        diff = product_stats[lamp2][param]['mean'] - product_stats[lamp1][param]['mean']
-                        report.append(f"    - Diferencia en {param}: {diff:+.3f} %")
+                for param in params:
+                    if param in product_stats[base_lamp] and param in product_stats[lamp]:
+                        base_mean = product_stats[base_lamp][param]['mean']
+                        comp_mean = product_stats[lamp][param]['mean']
+                        diff = comp_mean - base_mean
+                        percent_diff = (diff / base_mean * 100) if base_mean != 0 else 0
+                        
+                        report.append(f"      {param:<25} Δ = {diff:+.3f}  ({percent_diff:+.2f}%)")
                 
                 report.append("")
         
         report.append("")
     
-    # Conclusiones generales
-    report.append("=" * 100)
-    report.append("CONCLUSIONES GENERALES")
-    report.append("=" * 100)
+    # Resumen estadístico general
+    report.append("=" * 120)
+    report.append("RESUMEN ESTADÍSTICO GENERAL")
+    report.append("=" * 120)
     report.append("")
-    report.append("CONSISTENCIA ENTRE LÁMPARAS:")
-    report.append("  • Las diferencias entre lámparas son generalmente pequeñas")
-    report.append("  • La variabilidad intra-lámpara (desviación estándar) es baja en la mayoría de mediciones")
-    report.append("")
-    report.append("RECOMENDACIONES:")
-    report.append("  • Todas las lámparas muestran un rendimiento comparable")
-    report.append("  • La selección puede basarse en otros criterios (estabilidad, vida útil, etc.)")
-    report.append("")
+    
+    for product in stats.keys():
+        report.append(f"Producto: {product}")
+        
+        # Obtener parámetros
+        if product in analyzer.data:
+            df = analyzer.data[product]
+            excluded_cols = ['No', 'ID', 'Note', 'Product', 'Method', 'Unit', 'Begin', 'End', 'Length']
+            if len(df.columns) > 1:
+                excluded_cols.append(df.columns[1])
+            params = [col for col in df.columns if col not in excluded_cols]
+        else:
+            params = list(stats[product][list(stats[product].keys())[0]].keys())
+            params = [p for p in params if p not in ['n', 'note']]
+        
+        for param in params[:5]:  # Primeros 5 parámetros para resumen
+            report.append(f"  {param}:")
+            
+            # Calcular estadísticas entre lámparas
+            values = []
+            for lamp_stats in stats[product].values():
+                if param in lamp_stats:
+                    values.append(lamp_stats[param]['mean'])
+            
+            if values:
+                overall_mean = sum(values) / len(values)
+                overall_std = (sum((x - overall_mean) ** 2 for x in values) / len(values)) ** 0.5
+                overall_range = max(values) - min(values)
+                
+                report.append(f"    Media entre lámparas: {overall_mean:.3f} ± {overall_std:.3f}")
+                report.append(f"    Rango: {overall_range:.3f}")
+        
+        report.append("")
+    
+    report.append("=" * 120)
+    report.append("FIN DEL INFORME")
+    report.append("=" * 120)
     
     return "\n".join(report)
 
@@ -1201,21 +1271,14 @@ def main():
                     st.header("📊 Resultados del Análisis")
                     
                     # Tabs para diferentes visualizaciones
-                    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-                        "📈 Diferencias entre Lámparas",
+                    tab1, tab2, tab3, tab4 = st.tabs([
                         "📊 Comparación Detallada",
+                        "📈 Diferencias entre Lámparas",
                         "📦 Box Plots",
-                        "🎯 Scatter Plots",
                         "📄 Reporte de Texto"
                     ])
                     
                     with tab1:
-                        st.subheader("Diferencias Relativas entre Lámparas")
-                        fig_diff = create_comparison_plots(stats)
-                        if fig_diff:
-                            st.plotly_chart(fig_diff, use_container_width=True)
-                    
-                    with tab2:
                         st.subheader("Comparación Detallada por Producto")
                         
                         # Obtener parámetros en orden original
@@ -1232,6 +1295,12 @@ def main():
                             if fig_detailed:
                                 st.plotly_chart(fig_detailed, use_container_width=True)
                     
+                    with tab2:
+                        st.subheader("Diferencias Relativas entre Lámparas")
+                        fig_diff = create_comparison_plots(stats)
+                        if fig_diff:
+                            st.plotly_chart(fig_diff, use_container_width=True)
+                    
                     with tab3:
                         st.subheader("Distribución de Valores por Lámpara")
                         fig_box = create_box_plots(stats, analyzer)
@@ -1239,14 +1308,8 @@ def main():
                             st.plotly_chart(fig_box, use_container_width=True)
                     
                     with tab4:
-                        st.subheader("Relación entre Parámetros")
-                        fig_scatter = create_scatter_plots(stats)
-                        if fig_scatter:
-                            st.plotly_chart(fig_scatter, use_container_width=True)
-                    
-                    with tab5:
                         st.subheader("Informe Completo en Texto")
-                        report_text = generate_text_report(stats)
+                        report_text = generate_text_report(stats, analyzer)
                         st.text_area("Reporte:", report_text, height=600)
                         
                         # Botón de descarga
