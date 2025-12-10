@@ -200,7 +200,81 @@ class NIRAnalyzer:
         
         return stats
 
+def load_buchi_css():
+    """Carga el CSS corporativo de BUCHI"""
+    try:
+        with open('buchi_report_styles_simple.css', 'r', encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        # CSS inline por defecto si no se encuentra el archivo
+        return """
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                margin: 0;
+                padding: 0;
+                background-color: #f5f5f5;
+                color: #333;
+            }
+            /* ... resto del CSS inline como fallback ... */
+        """
 
+def wrap_chart_in_expandable(chart_html, title, chart_id, default_open=True):
+    """
+    Envuelve un gráfico en un elemento expandible HTML con estilo BUCHI.
+    """
+    open_attr = "open" if default_open else ""
+    
+    return f"""
+    <details {open_attr} style="margin: 20px 0; border: 1px solid #ddd; border-radius: 5px; padding: 10px; background-color: white;">
+        <summary style="cursor: pointer; font-weight: bold; padding: 10px; background-color: #f8f9fa; border-radius: 5px; user-select: none; color: #093A34;">
+            📊 {title}
+        </summary>
+        <div style="padding: 15px; margin-top: 10px;">
+            {chart_html}
+        </div>
+    </details>
+    """
+
+def generate_html_header():
+    """Genera el encabezado HTML con sidebar BUCHI"""
+    
+    # Definir secciones del índice EN EL ORDEN CORRECTO
+    sections = [
+        ("info-general", "Información General"),
+        ("statistics", "Estadísticas Detalladas"),
+        ("comparison-charts", "Gráficos Comparativos"),
+        ("text-report", "Reporte en Texto")
+    ]
+    
+    sidebar_items = "\n".join(
+        f'<li><a href="#{section_id}">{section_name}</a></li>'
+        for section_id, section_name in sections
+    )
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Reporte de Predicciones NIR - BUCHI</title>
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <style>
+            {load_buchi_css()}
+        </style>
+    </head>
+    <body>
+        <div class="sidebar">
+            <ul>
+                {sidebar_items}
+            </ul>
+        </div>
+        
+        <div class="main-content">
+    """
+    
+    return html
+    
 def create_comparison_plots(stats):
     """Crear gráficos comparativos entre lámparas para todos los parámetros"""
     
@@ -707,8 +781,11 @@ def create_scatter_plots(stats):
     return fig
 
 
+
 def generate_html_report(stats, analyzer, filename):
-    """Generar reporte HTML completo con todos los análisis"""
+    """
+    Generar reporte HTML completo con estilo corporativo BUCHI.
+    """
     
     # Obtener información general
     products = list(stats.keys())
@@ -720,170 +797,60 @@ def generate_html_report(stats, analyzer, filename):
     sensor_serial = analyzer.sensor_serial if analyzer.sensor_serial else "N/A"
     timestamp = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
     
-    # Comenzar HTML
-    html = f"""
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Reporte de Predicciones NIR - {sensor_serial}</title>
-        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-        <style>
-            body {{
-                font-family: 'Arial', sans-serif;
-                margin: 20px;
-                background-color: #f5f5f5;
-            }}
-            .header {{
-                background-color: #2c3e50;
-                color: white;
-                padding: 30px;
-                text-align: center;
-                border-radius: 10px;
-                margin-bottom: 30px;
-            }}
-            .info-box {{
-                background-color: white;
-                padding: 20px;
-                margin: 20px 0;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }}
-            .section {{
-                background-color: white;
-                padding: 25px;
-                margin: 25px 0;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }}
-            h1 {{
-                margin: 0;
-                font-size: 2.5em;
-            }}
-            h2 {{
-                color: #2c3e50;
-                border-bottom: 3px solid #3498db;
-                padding-bottom: 10px;
-            }}
-            .info-grid {{
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                gap: 15px;
-                margin: 20px 0;
-            }}
-            .info-item {{
-                background-color: #ecf0f1;
-                padding: 15px;
-                border-radius: 5px;
-            }}
-            .info-label {{
-                font-weight: bold;
-                color: #2c3e50;
-                display: block;
-                margin-bottom: 5px;
-            }}
-            .info-value {{
-                color: #34495e;
-                font-size: 1.1em;
-            }}
-            .plot-container {{
-                margin: 30px 0;
-            }}
-            .footer {{
-                text-align: center;
-                color: #7f8c8d;
-                margin-top: 50px;
-                padding: 20px;
-                border-top: 2px solid #ecf0f1;
-            }}
-            table {{
-                width: 100%;
-                border-collapse: collapse;
-                margin: 20px 0;
-                font-size: 0.9em;
-            }}
-            th {{
-                padding: 12px 8px;
-                text-align: center;
-                border: 1px solid #ddd;
-                background-color: #34495e;
-                color: white;
-                font-weight: bold;
-            }}
-            td {{
-                padding: 10px 8px;
-                text-align: center;
-                border: 1px solid #ddd;
-            }}
-            tr:nth-child(even) {{
-                background-color: #f8f9fa;
-            }}
-            tr:hover {{
-                background-color: #e8f4f8;
-            }}
-            .lamp-name {{
-                font-weight: bold;
-                text-align: left !important;
-                background-color: #ecf0f1;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h1>🔬 Reporte de Predicciones NIR</h1>
-            <p style="font-size: 1.2em; margin-top: 10px;">Análisis Comparativo de Lámparas</p>
-        </div>
+    # Iniciar HTML con header y sidebar
+    html = generate_html_header()
+    
+    # Título principal
+    html += f"""
+        <h1>Reporte de Predicciones NIR</h1>
         
-        <div class="info-box">
-            <h2>📋 Información General</h2>
+        <div class="info-box" id="info-general">
+            <h2>Información General del Análisis</h2>
             <div class="info-grid">
                 <div class="info-item">
-                    <span class="info-label">🔬 Sensor NIR:</span>
+                    <span class="info-label">🔬 Sensor NIR</span>
                     <span class="info-value">{sensor_serial}</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">📅 Fecha del Reporte:</span>
+                    <span class="info-label">📅 Fecha del Reporte</span>
                     <span class="info-value">{timestamp}</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">📦 Productos Analizados:</span>
+                    <span class="info-label">📦 Productos Analizados</span>
                     <span class="info-value">{len(products)}</span>
                 </div>
                 <div class="info-item">
-                    <span class="info-label">💡 Lámparas Comparadas:</span>
+                    <span class="info-label">💡 Lámparas Comparadas</span>
                     <span class="info-value">{len(all_lamps)}</span>
                 </div>
             </div>
-            <div style="margin-top: 20px;">
-                <span class="info-label">Productos:</span>
-                <span class="info-value">{', '.join(products)}</span>
-            </div>
-            <div style="margin-top: 10px;">
-                <span class="info-label">Lámparas:</span>
-                <span class="info-value">{', '.join(all_lamps)}</span>
-            </div>
+            
+            <table style="margin-top: 20px;">
+                <tr>
+                    <th>Productos</th>
+                    <td>{', '.join(products)}</td>
+                </tr>
+                <tr>
+                    <th>Lámparas</th>
+                    <td>{', '.join(all_lamps)}</td>
+                </tr>
+            </table>
         </div>
     """
     
-    # Añadir estadísticas por producto
+    # PRIMERO: Estadísticas por producto
     html += """
-        <div class="section">
-            <h2>📊 Estadísticas por Producto y Lámpara</h2>
+        <div class="info-box" id="statistics">
+            <h2>Estadísticas por Producto y Lámpara</h2>
     """
     
     for product in products:
-        html += f"""
-            <h3 style="color: #3498db; margin-top: 30px;">{product}</h3>
-        """
-        
-        # Obtener TODOS los parámetros para este producto en el orden del DataFrame original
+        # Obtener parámetros en orden original
         if product in analyzer.data:
             df = analyzer.data[product]
             excluded_cols = ['No', 'ID', 'Note', 'Product', 'Method', 'Unit', 'Begin', 'End', 'Length']
             if len(df.columns) > 1:
                 excluded_cols.append(df.columns[1])
-            
             params = [col for col in df.columns if col not in excluded_cols]
         else:
             params = set()
@@ -891,8 +858,8 @@ def generate_html_report(stats, analyzer, filename):
                 params.update([k for k in lamp_stats.keys() if k not in ['n', 'note']])
             params = sorted(list(params))
         
-        # Crear tabla con scroll horizontal si hay muchas columnas
-        html += """
+        html += f"""
+            <h3>{product}</h3>
             <div style="overflow-x: auto;">
                 <table>
                     <thead>
@@ -913,7 +880,7 @@ def generate_html_report(stats, analyzer, filename):
         for lamp, lamp_stats in stats[product].items():
             html += f"""
                         <tr>
-                            <td class="lamp-name">{lamp}</td>
+                            <td style="font-weight: bold; background-color: #f8f9fa;">{lamp}</td>
                             <td>{lamp_stats['n']}</td>
             """
             
@@ -939,64 +906,54 @@ def generate_html_report(stats, analyzer, filename):
         </div>
     """
     
-    # Añadir gráficos de comparación detallada
+    # SEGUNDO: Gráficos comparativos
     html += """
-        <div class="section">
-            <h2>📊 Comparación Detallada por Parámetro</h2>
+        <div class="info-box" id="comparison-charts">
+            <h2>Gráficos Comparativos</h2>
+            <p style='color: #6c757d; font-size: 0.95em;'>
+                <em>Análisis visual de las predicciones NIR entre diferentes lámparas.</em>
+            </p>
     """
     
     # Obtener parámetros en orden original
     params_ordered = get_params_in_original_order(analyzer, products)
     
     for param in params_ordered:
-        # Generar gráfico para este parámetro
         fig = create_detailed_comparison(stats, param)
         
         if fig:
-            # Convertir gráfico a HTML
-            graph_html = fig.to_html(include_plotlyjs=False, div_id=f"graph_{param.replace(' ', '_')}")
+            chart_html = fig.to_html(
+                include_plotlyjs=False,
+                div_id=f"graph_{param.replace(' ', '_')}"
+            )
             
-            html += f"""
-                <h3 style="color: #3498db; margin-top: 30px;">{param}</h3>
-                <div class="plot-container">
-                    {graph_html}
-                </div>
-            """
+            html += wrap_chart_in_expandable(
+                chart_html,
+                f"Comparación detallada: {param}",
+                f"chart_{param.replace(' ', '_')}",
+                default_open=True
+            )
     
     html += """
         </div>
     """
     
-    # Añadir reporte de texto
+    # TERCERO: Reporte de texto
     text_report = generate_text_report(stats, analyzer)
     
-    html += """
-        <div class="section">
-            <h2>📄 Informe Detallado en Texto</h2>
-            <pre style="
-                background-color: #f8f9fa;
-                padding: 20px;
-                border-radius: 8px;
-                border: 1px solid #dee2e6;
-                overflow-x: auto;
-                font-family: 'Courier New', monospace;
-                font-size: 0.85em;
-                line-height: 1.5;
-                white-space: pre-wrap;
-            ">"""
-    
-    html += text_report
-    
-    html += """
-            </pre>
+    html += f"""
+        <div class="info-box" id="text-report">
+            <h2>Informe Detallado en Texto</h2>
+            <pre>{text_report}</pre>
         </div>
     """
     
-    # Cerrar HTML
-    html += """
+    # Footer
+    html += f"""
         <div class="footer">
-            <p><strong>NIR Analyzer</strong> - Desarrollado para BUCHI</p>
-            <p>Reporte generado automáticamente</p>
+            <p><strong>NIR Predictions Analyzer</strong> - Desarrollado para BUCHI</p>
+            <p>Reporte generado automáticamente el {timestamp}</p>
+            <p style="color: #093A34; font-weight: bold;">BUCHI Labortechnik AG</p>
         </div>
     </body>
     </html>
