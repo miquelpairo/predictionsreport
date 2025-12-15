@@ -12,6 +12,7 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 import io
 from datetime import datetime
+from buchi_streamlit_theme import apply_buchi_styles, BUCHI_COLORS
 
 
 class NIRAnalyzer:
@@ -206,17 +207,98 @@ def load_buchi_css():
         with open('buchi_report_styles_simple.css', 'r', encoding='utf-8') as f:
             return f.read()
     except FileNotFoundError:
-        # CSS inline por defecto si no se encuentra el archivo
+        # CSS inline completo como fallback
         return """
-            body {
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                margin: 0;
-                padding: 0;
-                background-color: #f5f5f5;
-                color: #333;
+            /* Estilos globales Streamlit */
+            .main .block-container {
+                padding-top: 2rem;
+                max-width: 1400px;
             }
-            /* ... resto del CSS inline como fallback ... */
+            
+            /* Sidebar corporativo */
+            [data-testid="stSidebar"] {
+                background: linear-gradient(180deg, #093A34 0%, #064d45 100%);
+            }
+            
+            [data-testid="stSidebar"] h1, 
+            [data-testid="stSidebar"] h2, 
+            [data-testid="stSidebar"] h3,
+            [data-testid="stSidebar"] label,
+            [data-testid="stSidebar"] .stMarkdown {
+                color: white !important;
+            }
+            
+            /* Botones corporativos */
+            .stButton > button {
+                background: linear-gradient(135deg, #093A34 0%, #64B445 100%);
+                color: white !important;
+                border: none;
+                border-radius: 5px;
+                padding: 0.75rem 2rem;
+                font-weight: 600;
+                transition: all 0.3s;
+            }
+            
+            .stButton > button:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(100, 180, 69, 0.4);
+            }
+            
+            /* Info boxes */
+            .stAlert {
+                border-radius: 8px;
+                border-left: 4px solid #64B445;
+            }
+            
+            /* Tabs corporativos */
+            .stTabs [data-baseweb="tab-list"] {
+                gap: 8px;
+                background-color: #f8f9fa;
+                padding: 0.5rem;
+                border-radius: 8px;
+            }
+            
+            .stTabs [data-baseweb="tab"] {
+                background-color: white;
+                border-radius: 5px;
+                color: #093A34;
+                font-weight: 600;
+                padding: 0.75rem 1.5rem;
+            }
+            
+            .stTabs [aria-selected="true"] {
+                background: linear-gradient(135deg, #093A34 0%, #64B445 100%);
+                color: white !important;
+            }
+            
+            /* Tablas */
+            .dataframe thead tr th {
+                background-color: #093A34 !important;
+                color: white !important;
+                font-weight: 600 !important;
+            }
+            
+            /* Expanders */
+            .streamlit-expanderHeader {
+                background-color: #f8f9fa;
+                border-radius: 5px;
+                color: #093A34;
+                font-weight: 600;
+            }
+            
+            /* Métricas */
+            [data-testid="stMetricValue"] {
+                color: #093A34;
+                font-size: 2rem;
+                font-weight: bold;
+            }
+            
+            /* Spinners */
+            .stSpinner > div {
+                border-top-color: #64B445 !important;
+            }
         """
+
 
 def wrap_chart_in_expandable(chart_html, title, chart_id, default_open=True):
     """
@@ -1359,13 +1441,38 @@ def main():
     """Función principal de la aplicación Streamlit"""
     
     st.set_page_config(
-        page_title="NIR Analyzer",
+        page_title="NIR Predictions Analyzer",
         page_icon="🔬",
         layout="wide"
     )
     
-    st.title("🔬 Analizador de Predicciones NIR")
-    st.markdown("### Comparación de lámparas y análisis de resultados")
+    # ⭐ NUEVO: Cargar estilos CSS corporativos
+    st.markdown(f"""
+    <style>
+        {load_buchi_css()}
+    </style>
+    """, unsafe_allow_html=True)
+    
+
+    
+    # ⭐ Aplicar estilos corporativos BUCHI
+    apply_buchi_styles()
+
+    # ⭐ Header simple y limpio (sin gradiente)
+    st.markdown(f"""
+    <div style="background-color: {BUCHI_COLORS['gris_claro']}; 
+                padding: 2rem; 
+                border-radius: 10px; 
+                margin-bottom: 2rem; 
+                text-align: center;">
+        <h1 style="color: white !important; margin: 0; font-size: 2.5rem;">
+            🔬 NIR Predictions Analyzer
+        </h1>
+        <p style="color: white !important; margin: 0.5rem 0 0 0; font-size: 1.1rem; opacity: 0.9;">
+            Análisis Comparativo de Lámparas NIR
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Inicializar session state
     if 'analyzer' not in st.session_state:
