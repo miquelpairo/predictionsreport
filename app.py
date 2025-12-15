@@ -243,6 +243,7 @@ def generate_html_header():
         ("info-general", "Información General"),
         ("statistics", "Estadísticas Detalladas"),
         ("comparison-charts", "Gráficos Comparativos"),
+        ("differences-by-product", "Diferencias por Producto"),
         ("text-report", "Reporte en Texto")
     ]
     
@@ -780,7 +781,236 @@ def create_scatter_plots(stats):
     
     return fig
 
+def calculate_lamp_differences(stats, analyzer):
+    """
+    Calcula diferencias entre lámparas para cada producto de forma estructurada.
+    
+    Returns:
+        dict: {
+            'Producto A': {
+                'baseline_lamp': 'W-2024-001',
+                'comparisons': [
+                    {
+                        'lamp': 'W-2025-002',
+                        'n_baseline': 10,
+                        'n_compared': 12,
+                        'differences': {
+                            'H': {
+                                'baseline_mean': 10.5,
+                                'compared_mean': 10.7,
+                                'absolute_diff': 0.2,
+                                'percent_diff': 1.9
+                            },
+                            'PB': {...}
+                        }
+                    }
+                ]
+            }
+        }
+    """
+    differences_by_product = {}
+    
+    for product, product_stats in stats.items():
+        # Usar primera lámpara como baseline
+        lamps = sorted(list(product_stats.keys()))
+        
+        if len(lamps) < 2:
+            continue  # Necesitamos al menos 2 lámparas para comparar
+        
+        baseline_lamp = lamps[0]
+        comparison_lamps = lamps[1:]
+        
+        # Obtener parámetros en orden original
+        if product in analyzer.data:
+            df = analyzer.data[product]
+            excluded_cols = ['No', 'ID', 'Note', 'Product', 'Method', 'Unit', 'Begin', 'End', 'Length']
+            if len(df.columns) > 1:
+                excluded_cols.append(df.columns[1])
+            params = [col for col in df.columns if col not in excluded_cols]
+        else:
+            params = set()
+            for lamp_stats in product_stats.values():
+                params.update([k for k in lamp_stats.keys() if k not in ['n', 'note']])
+            params = sorted(list(params))
+        
+        # Estructura de comparaciones
+        comparisons = []
+        
+        for comp_lamp in comparison_lamps:
+            comparison = {
+                'lamp': comp_lamp,
+                'n_baseline': product_stats[baseline_lamp]['n'],
+                'n_compared': product_stats[comp_lamp]['n'],
+                'differences': {}
+            }
+            
+            for param in params:
+                if (param in product_stats[baseline_lamp] and 
+                    param in product_stats[comp_lamp]):
+                    
+                    baseline_mean = product_stats[baseline_lamp][param]['mean']
+                    compared_mean = product_stats[comp_lamp][param]['mean']
+                    
+                    abs_diff = compared_mean - baseline_mean
+                    percent_diff = (abs_diff / baseline_mean * 100) if baseline_mean != 0 else 0
+                    
+                    comparison['differences'][param] = {
+                        'baseline_mean': baseline_mean,
+                        'compared_mean': compared_mean,
+                        'absolute_diff': abs_diff,
+                        'percent_diff': percent_diff
+                    }
+            
+            comparisons.append(comparison)
+        
+        differences_by_product[product] = {
+            'baseline_lamp': baseline_lamp,
+            'comparisons': comparisons
+        }
+    
+    return differences_by_product
 
+def generate_differences_section(differences_data):
+    """
+    Genera HTML para la sección de diferencias por producto.
+    
+    Args:
+        differences_data: Salida de calculate_lamp_differences()
+        
+    Returns:
+        str: HTML con visualización de diferencias
+    """
+    
+    html = """
+    <div class="info-box" id="differences-by-product">
+        <h2>📊 Diferencias por Producto</h2>
+        <p style='color: #6c757d; font-size: 0.95em; margin-bottom: 25px;'>
+            <em>Análisis comparativo detallado entre lámparas para cada producto. 
+            Se muestra la diferencia absoluta y porcentual de cada parámetro respecto 
+            a la lámpara baseline (primera lámpara seleccionada).</em>
+        </p>
+    """
+    
+    for product, product_data in differences_data.items():
+        baseline_lamp = product_data['baseline_lamp']
+        comparisons = product_data['comparisons']
+        
+        html += f"""
+        <div style="margin-bottom: 40px; padding: 20px; background-color: #f8f9fa; border-radius: 8px; border-left: 4px solid #64B445;">
+            <h3 style="margin-top: 0; color: #093A34;">🔬 {product}</h3>
+            <p style="color: #6c757d; font-size: 0.9em; margin-bottom: 20px;">
+                <strong>Lámpara Baseline:</strong> {baseline_lamp} 
+                (N = {comparisons[0]['n_baseline'] if comparisons else 'N/A'})
+            </p>
+        """
+        
+        for comparison in comparisons:
+            comp_lamp = comparison['lamp']
+            n_compared = comparison['n_compared']
+            differences = comparison['differences']
+            
+            # Crear tabla de diferencias
+            html += f"""
+            <details open style="margin-bottom: 20px; border: 1px solid #dee2e6; border-radius: 5px; background-color: white;">
+                <summary style="cursor: pointer; padding: 15px; background-color: #e9ecef; border-radius: 5px; user-select: none; font-weight: bold;">
+                    📍 {comp_lamp} vs {baseline_lamp} (N = {n_compared})
+                </summary>
+                
+                <div style="padding: 20px;">
+                    <table style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th style="text-align: left;">Parámetro</th>
+                                <th style="text-align: center;">{baseline_lamp}<br/><span style="font-weight: normal; font-size: 0.85em;">(Baseline)</span></th>
+                                <th style="text-align: center;">{comp_lamp}<br/><span style="font-weight: normal; font-size: 0.85em;">(Comparada)</span></th>
+                                <th style="text-align: center;">Δ Absoluta</th>
+                                <th style="text-align: center;">Δ Relativa (%)</th>
+                                <th style="text-align: center;">Evaluación</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            """
+            
+            # Ordenar parámetros por diferencia absoluta (mayor a menor)
+            sorted_params = sorted(
+                differences.items(), 
+                key=lambda x: abs(x[1]['absolute_diff']), 
+                reverse=True
+            )
+            
+            for param, diff_data in sorted_params:
+                baseline_val = diff_data['baseline_mean']
+                compared_val = diff_data['compared_mean']
+                abs_diff = diff_data['absolute_diff']
+                percent_diff = diff_data['percent_diff']
+                
+                # Clasificar magnitud de diferencia
+                abs_percent = abs(percent_diff)
+                if abs_percent < 2.0:
+                    evaluation = '🟢 Excelente'
+                    eval_color = '#4caf50'
+                elif abs_percent < 5.0:
+                    evaluation = '🟡 Aceptable'
+                    eval_color = '#ffc107'
+                elif abs_percent < 10.0:
+                    evaluation = '🟠 Revisar'
+                    eval_color = '#ff9800'
+                else:
+                    evaluation = '🔴 Significativo'
+                    eval_color = '#f44336'
+                
+                # Color de fondo para diferencia
+                if abs_percent < 2.0:
+                    row_bg = '#e8f5e9'
+                elif abs_percent < 5.0:
+                    row_bg = '#fff3e0'
+                else:
+                    row_bg = '#ffebee'
+                
+                # Símbolo de dirección
+                direction = '↑' if abs_diff > 0 else '↓' if abs_diff < 0 else '='
+                
+                html += f"""
+                    <tr style="background-color: {row_bg};">
+                        <td style="font-weight: bold;">{param}</td>
+                        <td style="text-align: center;">{baseline_val:.3f}</td>
+                        <td style="text-align: center;">{compared_val:.3f}</td>
+                        <td style="text-align: center; font-weight: bold;">{direction} {abs(abs_diff):.3f}</td>
+                        <td style="text-align: center; font-weight: bold; color: {eval_color};">
+                            {abs_diff:+.3f} ({percent_diff:+.2f}%)
+                        </td>
+                        <td style="text-align: center; color: {eval_color}; font-weight: bold;">
+                            {evaluation}
+                        </td>
+                    </tr>
+                """
+            
+            html += """
+                        </tbody>
+                    </table>
+                    
+                    <div style="margin-top: 15px; padding: 10px; background-color: #f1f3f4; border-radius: 5px;">
+                        <strong>📌 Leyenda de Evaluación:</strong>
+                        <ul style="margin: 10px 0 0 20px; font-size: 0.9em;">
+                            <li><strong>🟢 Excelente:</strong> Δ < 0.5% - Diferencia despreciable</li>
+                            <li><strong>🟡 Aceptable:</strong> 0.5% ≤ Δ < 2% - Dentro del rango esperado</li>
+                            <li><strong>🟠 Revisar:</strong> 2% ≤ Δ < 5% - Diferencia notable, revisar causas</li>
+                            <li><strong>🔴 Significativo:</strong> Δ ≥ 5% - Diferencia importante, requiere investigación</li>
+                        </ul>
+                    </div>
+                </div>
+            </details>
+            """
+        
+        html += """
+        </div>
+        """
+    
+    html += """
+    </div>
+    """
+    
+    return html
 
 def generate_html_report(stats, analyzer, filename):
     """
@@ -797,10 +1027,14 @@ def generate_html_report(stats, analyzer, filename):
     sensor_serial = analyzer.sensor_serial if analyzer.sensor_serial else "N/A"
     timestamp = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
     
-    # Iniciar HTML con header y sidebar
+    # ============================================
+    # HEADER CON SIDEBAR
+    # ============================================
     html = generate_html_header()
     
-    # Título principal
+    # ============================================
+    # TÍTULO PRINCIPAL
+    # ============================================
     html += f"""
         <h1>Reporte de Predicciones NIR</h1>
         
@@ -838,10 +1072,16 @@ def generate_html_report(stats, analyzer, filename):
         </div>
     """
     
-    # PRIMERO: Estadísticas por producto
+    # ============================================
+    # SECCIÓN 1: ESTADÍSTICAS POR PRODUCTO
+    # ============================================
     html += """
         <div class="info-box" id="statistics">
             <h2>Estadísticas por Producto y Lámpara</h2>
+            <p style='color: #6c757d; font-size: 0.95em; margin-bottom: 25px;'>
+                <em>Valores promedio y desviación estándar de cada parámetro analítico 
+                para cada lámpara y producto.</em>
+            </p>
     """
     
     for product in products:
@@ -906,7 +1146,9 @@ def generate_html_report(stats, analyzer, filename):
         </div>
     """
     
-    # SEGUNDO: Gráficos comparativos
+    # ============================================
+    # SECCIÓN 2: GRÁFICOS COMPARATIVOS
+    # ============================================
     html += """
         <div class="info-box" id="comparison-charts">
             <h2>Gráficos Comparativos</h2>
@@ -938,17 +1180,33 @@ def generate_html_report(stats, analyzer, filename):
         </div>
     """
     
-    # TERCERO: Reporte de texto
+    # ============================================
+    # ⭐ SECCIÓN 3: DIFERENCIAS POR PRODUCTO (NUEVO)
+    # ============================================
+    differences_data = calculate_lamp_differences(stats, analyzer)
+    
+    if differences_data:
+        html += generate_differences_section(differences_data)
+    
+    # ============================================
+    # SECCIÓN 4: REPORTE DE TEXTO
+    # ============================================
     text_report = generate_text_report(stats, analyzer)
     
     html += f"""
         <div class="info-box" id="text-report">
             <h2>Informe Detallado en Texto</h2>
-            <pre>{text_report}</pre>
+            <p style='color: #6c757d; font-size: 0.95em; margin-bottom: 20px;'>
+                <em>Reporte completo en formato de texto con análisis estadístico 
+                y comparaciones detalladas.</em>
+            </p>
+            <pre style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; overflow-x: auto; line-height: 1.6;">{text_report}</pre>
         </div>
     """
     
-    # Footer
+    # ============================================
+    # FOOTER
+    # ============================================
     html += f"""
         <div class="footer">
             <p><strong>NIR Predictions Analyzer</strong> - Desarrollado para BUCHI</p>
